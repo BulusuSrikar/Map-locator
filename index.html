@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Map Application</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <style>
+        #map { height: 600px; width: 100%; }
+        #search-bar { margin: 20px 0; position: relative; }
+        #suggestions { border: 1px solid #ccc; position: absolute; background: white; z-index: 1000; width: calc(100% - 2px); }
+        .suggestion { padding: 8px; cursor: pointer; }
+        .suggestion:hover { background-color: #f0f0f0; }
+    </style>
+</head>
+<body>
+    <h1>Simple Map Application</h1>
+    <div id="search-bar">
+        <input type="text" id="location-input" placeholder="Enter a location..." />
+        <button id="search-button">Search</button>
+        <div id="suggestions"></div>
+    </div>
+    <div id="map"></div>
+    
+    <script>
+        let map;
+        const suggestionsDiv = document.getElementById('suggestions');
+
+        // Initialize the map
+        function initMap() {
+            map = L.map('map').setView([20.5937, 78.9629], 5); // Default center on India
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+
+            // Get the user's location
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(function(position) {
+                    const lat = position.coords.latitude;
+                    const lon = position.coords.longitude;
+
+                    // Center the map on the user's location
+                    map.setView([lat, lon], 13);
+
+                    // Place a marker at the user's location
+                    L.marker([lat, lon]).addTo(map)
+                        .bindPopup("You are here!").openPopup();
+                }, function() {
+                    alert("Unable to retrieve your location.");
+                });
+            } else {
+                alert("Geolocation is not supported by this browser.");
+            }
+
+            // Add event listener for the Enter key
+            document.getElementById('location-input').addEventListener('keypress', function (event) {
+                if (event.key === 'Enter') {
+                    event.preventDefault(); // Prevent form submission if in a form
+                    searchLocation(document.getElementById('location-input').value);
+                }
+            });
+
+            // Add event listener for input changes to fetch suggestions
+            document.getElementById('location-input').addEventListener('input', function () {
+                const query = this.value;
+                if (query.length > 0) {
+                    fetchSuggestions(query);
+                } else {
+                    suggestionsDiv.innerHTML = ''; // Clear suggestions if input is empty
+                }
+            });
+        }
+
+        // Function to fetch suggestions from Nominatim
+        function fetchSuggestions(query) {
+            const nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&q=${encodeURIComponent(query)}&limit=5`;
+            fetch(nominatimUrl)
+                .then(response => response.json())
+                .then(data => {
+                    showSuggestions(data);
+                })
+                .catch(error => {
+                    console.error("Error fetching suggestions:", error);
+                });
+        }
+
+        // Function to display suggestions
+        function showSuggestions(suggestions) {
+            suggestionsDiv.innerHTML = ''; // Clear existing suggestions
+            suggestions.forEach(suggestion => {
+                const div = document.createElement('div');
+                div.className = 'suggestion';
+                div.textContent = suggestion.display_name;
+                div.onclick = function () {
+                    searchLocation(suggestion.display_name);
+                    suggestionsDiv.innerHTML = ''; // Clear suggestions after selection
+                };
+                suggestionsDiv.appendChild(div);
+            });
+        }
+
+        // Function to search for a location using Nominatim
+        function searchLocation(location) {
+            const nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(location)}`;
+            fetch(nominatimUrl)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.length > 0) {
+                        const firstResult = data[0];
+                        const lat = firstResult.lat;
+                        const lon = firstResult.lon;
+
+                        // Move the map to the location
+                        map.setView([lat, lon], 13);
+
+                        // Place a marker at the found location
+                        L.marker([lat, lon]).addTo(map)
+                            .bindPopup(firstResult.display_name).openPopup();
+
+                        // Clear the input field
+                        document.getElementById('location-input').value = "";
+                    } else {
+                        alert("Location not found.");
+                    }
+                })
+                .catch(error => {
+                    console.error("Error fetching location:", error);
+                });
+        }
+
+        window.onload = initMap;
+    </script>
+</body>
+</html>
